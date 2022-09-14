@@ -25,16 +25,16 @@ class BlurTool:
             print(start_y, end_y, start_x, end_x)
         return frame
 
-    def add_faces(self, frame):
-        for i in self.faces:
-            if i[1] > 0.45 and i[3] == 0:
-                w = math.sqrt(i[2])//2
-                start_x, end_x, start_y, end_y = int(i[0][0] - w), int(i[0][0] + w), int(i[0][1] - w), int(i[0][1] + w)
-                h, w = frame.shape[:2]
-                kernel_width = (w // 7) | 1
-                kernel_height = (h // 7) | 1
-                frame = self.draw_face(frame, start_y, end_y, start_x, end_x, kernel_width, kernel_height, i[1])
-        return frame
+    # def add_faces(self, frame):
+    #     for i in self.faces:
+    #         if i[1] > 0.45 and i[3] == 0:
+    #             w = math.sqrt(i[2])//2
+    #             start_x, end_x, start_y, end_y = int(i[0][0] - w), int(i[0][0] + w), int(i[0][1] - w), int(i[0][1] + w)
+    #             h, w = frame.shape[:2]
+    #             kernel_width = (w // 7) | 1
+    #             kernel_height = (h // 7) | 1
+    #             frame = self.draw_face(frame, start_y, end_y, start_x, end_x, kernel_width, kernel_height, i[1])
+    #     return frame
 
     def nearby_face(self, midpoint, confidence, size):
         # [midpoint, confidence, size, flag]
@@ -58,6 +58,15 @@ class BlurTool:
 
         return False
 
+
+    ''' 
+    Checks if contour is near to license plate in previous frames and within size requirements.
+    When new license plate is detected, coordinate is stored in self.plates with counter of 10.
+    If contour is found near license plate but is not detected as a plate itself, return True
+    and counter of plate will decrement by 1. If contour is found near license plate and 
+    is detected as plate itself, return True and counter of plate will increment by 2. 
+    Coordinates removed when counter reaches 0. 
+    '''
     def nearby_plate(self, coords, ar, angle, size, img_size):
         # [(actual_x, actual_y), counter]
         for i in self.plates:
@@ -74,6 +83,9 @@ class BlurTool:
             return True
         return False
 
+    ''' 
+    Blurs out license plate given the coordinates.
+    '''
     def draw_plates(self, frame, x, y, w, h):
         try:
             start_x, end_x, start_y, end_y = x * 0.96, (x+w) * 1.04, y*0.99, (y+h)*1.01
@@ -106,10 +118,15 @@ class BlurTool:
             size = (end_x - start_x) * (end_y - start_y)
             if self.nearby_face(midpoint, confidence, size):
                 frame = self.draw_face(frame, start_y, end_y, start_x, end_x, kernel_width, kernel_height, confidence)
-        self.add_faces(frame)
+        #self.add_faces(frame)
 
         return frame
 
+    ''' 
+    Given the frame of a vehicle, finds the license plate using edge detection (4 edges) or morphological
+    whitehat transformation. 
+    Performs decently but there is some flickering and false positives.
+    '''
     def blur_plate(self, vehicle, vehicle_x, vehicle_y):
         img_size = vehicle.shape[0] * vehicle.shape[1]
         gray = cv2.cvtColor(vehicle, cv2.COLOR_BGR2GRAY)
@@ -167,6 +184,10 @@ class BlurTool:
 
         return vehicle
 
+    ''' 
+    Detects vehicles using yolov3. 
+    Good accuracy.
+    '''
     def detect_vehicles(self, frame):
         blob = cv2.dnn.blobFromImage(frame, 1 / 255, (320, 320), [0, 0, 0], 1, crop=False)
         self.net.setInput(blob)
@@ -199,6 +220,9 @@ class BlurTool:
 
         return vehicles
 
+    ''' 
+    Runs detect_vehicles to find vehicle frames, and runs blur_plate on each vehicle frame
+    '''
     def blur_all_plates(self, frame):
         vehicles = self.detect_vehicles(frame)
         frame_size = frame.shape[0] * frame.shape[1]
@@ -211,9 +235,12 @@ class BlurTool:
                 frame[y:y+h, x:x+w] = vehicle
             except Exception as e:
                 print(e)
+
         return frame
         
-
+    ''' 
+    Slices video into frames and outputs new video.
+    '''
     def process_video(self, video):
         self.faces = []
         self.plates = []
