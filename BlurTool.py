@@ -19,22 +19,11 @@ class BlurTool:
             face = frame[start_y: end_y, start_x: end_x]
             face = cv2.GaussianBlur(face, (width, height), 0)
             #cv2.rectangle(frame, (start_x, start_y), (end_x, end_y), (255, 0, 255), 4)
-            cv2.putText(frame, str(confidence), (start_x, start_y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
+            #cv2.putText(frame, str(confidence), (start_x, start_y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
             frame[start_y: end_y, start_x: end_x] = face
         except:
             print(start_y, end_y, start_x, end_x)
         return frame
-
-    # def add_faces(self, frame):
-    #     for i in self.faces:
-    #         if i[1] > 0.45 and i[3] == 0:
-    #             w = math.sqrt(i[2])//2
-    #             start_x, end_x, start_y, end_y = int(i[0][0] - w), int(i[0][0] + w), int(i[0][1] - w), int(i[0][1] + w)
-    #             h, w = frame.shape[:2]
-    #             kernel_width = (w // 7) | 1
-    #             kernel_height = (h // 7) | 1
-    #             frame = self.draw_face(frame, start_y, end_y, start_x, end_x, kernel_width, kernel_height, i[1])
-    #     return frame
 
     def nearby_face(self, midpoint, confidence, size):
         # [midpoint, confidence, size, flag]
@@ -116,9 +105,9 @@ class BlurTool:
             start_x, start_y, end_x, end_y = box.astype(int)
             midpoint = ((start_x + end_x)//2, (start_y + end_y)//2)
             size = (end_x - start_x) * (end_y - start_y)
-            if self.nearby_face(midpoint, confidence, size):
+            #if self.nearby_face(midpoint, confidence, size):
+            if confidence > 0.2:
                 frame = self.draw_face(frame, start_y, end_y, start_x, end_x, kernel_width, kernel_height, confidence)
-        #self.add_faces(frame)
 
         return frame
 
@@ -177,7 +166,8 @@ class BlurTool:
             size = w * h
             actual_x, actual_y = x + vehicle_x, y + vehicle_y
             #cv2.drawContours(vehicle, [box.astype(int)], 0, (0, 255, 0), 3)
-            if self.nearby_plate((actual_x, actual_y), ar, angle, size, img_size):
+            #if self.nearby_plate((actual_x, actual_y), ar, angle, size, img_size):
+            if (ar > 2.5 and ar < 7 and (angle < 20 or angle > 70) and size < img_size * 0.08):
                 #cv2.drawContours(frame, [box.astype(int)], 0, (0, 255, 0), 3)
                 (x, y, w, h) = cv2.boundingRect(c)
                 vehicle = self.draw_plates(vehicle, x, y, w, h)
@@ -188,43 +178,60 @@ class BlurTool:
     Detects vehicles using yolov3. 
     Good accuracy.
     '''
-    def detect_vehicles(self, frame):
+    def detect_objects(self, frame):
         blob = cv2.dnn.blobFromImage(frame, 1 / 255, (320, 320), [0, 0, 0], 1, crop=False)
         self.net.setInput(blob)
         layersNames = self.net.getLayerNames()
         outputNames = [(layersNames[i - 1]) for i in self.net.getUnconnectedOutLayers()]
         outputs = self.net.forward(outputNames)
-        class_index = [2, 3, 5, 7]
-        boxes = []
-        confidence_scores = []
+        vehicles_index = [2, 3, 5, 7]
+        people_index = 0
+        vehicle_boxes = []
+        vehicle_confidence_scores = []
+        people_boxes = []
+        people_confidence_scores = []
         vehicles = []
+        people = []
         height, width = frame.shape[:2]
         for output in outputs:
             for det in output:
                     scores = det[5:]
                     classId = np.argmax(scores)
                     confidence = scores[classId]
-                    if classId in class_index:
+                    if classId in vehicles_index:
                         if confidence > 0.9:
                             w,h = int(det[2]*width) , int(det[3]*height)
                             x,y = int((det[0]*width)-w/2) , int((det[1]*height)-h/2)
-                            boxes.append([x,y,w,h])
-                            confidence_scores.append(float(confidence))
+                            vehicle_boxes.append([x,y,w,h])
+                            vehicle_confidence_scores.append(float(confidence))
                             #cv2.rectangle(frame, (x,y), (x+w,y+h), (0, 255, 255), 10)
-        indices = cv2.dnn.NMSBoxes(boxes, confidence_scores, 0.9, 0.2)
-        for i in indices.flatten():
-                x, y, w, h = int(boxes[i][0]), int(boxes[i][1]), int(boxes[i][2]), int(boxes[i][3])
-                vehicle = frame[y:y+h, x:x+w]
-                vehicles.append((vehicle, (x, y, w, h)))
-                #cv2.rectangle(frame, (x,y), (x+w,y+h), (0, 255, 255), 10)
+                    if classId == people_index:
+                        if confidence > 0.5:
+                            w,h = int(det[2]*width) , int(det[3]*height)
+                            x,y = int((det[0]*width)-w/2) , int((det[1]*height)-h/2)
+                            people_boxes.append([x, y, w, h])
+                            people_confidence_scores.append(float(confidence))
 
-        return vehicles
+        vehicle_indices = cv2.dnn.NMSBoxes(vehicle_boxes, vehicle_confidence_scores, 0.9, 0.2)
+        people_indices = cv2.dnn.NMSBoxes(people_boxes, people_confidence_scores, 0.5, 0.2)
+        for i in vehicle_indices.flatten():
+            x, y, w, h = int(vehicle_boxes[i][0]), int(vehicle_boxes[i][1]), int(vehicle_boxes[i][2]), int(vehicle_boxes[i][3])
+            vehicle = frame[y:y+h, x:x+w]
+            vehicles.append((vehicle, (x, y, w, h)))
+            #cv2.rectangle(frame, (x,y), (x+w,y+h), (0, 255, 255), 10)
+        for i in people_indices.flatten():
+            x, y, w, h = int(people_boxes[i][0]), int(people_boxes[i][1]), int(people_boxes[i][2]), int(people_boxes[i][3])
+            person = frame[y:y+h, x:x+w]
+            people.append((person, (x, y, w, h)))
+            #cv2.rectangle(frame, (x,y), (x+w,y+h), (0, 255, 255), 10)
+
+        return vehicles, people
 
     ''' 
     Runs detect_vehicles to find vehicle frames, and runs blur_plate on each vehicle frame
     '''
-    def blur_all_plates(self, frame):
-        vehicles = self.detect_vehicles(frame)
+    def blur_all(self, frame):
+        vehicles, people = self.detect_objects(frame)
         frame_size = frame.shape[0] * frame.shape[1]
         for v in vehicles:
             try:
@@ -234,7 +241,15 @@ class BlurTool:
                 vehicle = self.blur_plate(v[0], x, y)
                 frame[y:y+h, x:x+w] = vehicle
             except Exception as e:
-                print(e)
+                print(x, y, w, h)
+
+        for p in people:
+            try:
+                x, y, w, h = p[1]
+                person = self.blur_face(p[0])
+                frame[y:y+h, x:x+w] = person
+            except Exception as e:
+                print(x, y, w, h)
 
         return frame
         
@@ -255,8 +270,8 @@ class BlurTool:
             if not ret:
                 break
             #frame = self.blur_plate(frame)
-            frame = self.blur_all_plates(frame)
-            frame = self.blur_face(frame)
+            frame = self.blur_all(frame)
+            #frame = self.blur_face(frame)
             result.write(frame)
 
             cv2.imshow('frame', frame)
@@ -268,12 +283,12 @@ class BlurTool:
 
 bt = BlurTool()
 bt.plates = []
-bt.faces = []
-bt.process_video('dashcam.mp4')
-# while(True):
-#     cv2.imshow('frame', bt.blur_all_plates(cv2.imread('flicker2.png')))
-#     if cv2.waitKey(1) & 0xFF == ord('q'):
-#         break
+# bt.faces = []
+# bt.process_video('dashcam.mp4')
+while(True):
+    cv2.imshow('frame', bt.blur_all(cv2.imread('test_person.png')))
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
 
 
 
