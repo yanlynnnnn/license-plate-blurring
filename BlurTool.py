@@ -4,9 +4,51 @@ import os
 import cv2
 import imutils
 import numpy as np
+import subprocess 
+from adb import adb_commands
+
 
 # from openalpr import Alpr
 # import tensorflow.compat.v1 as tf
+
+class FileSizeTooSmallError(Exception):
+    '''raised when file size is too small for duration of video'''
+    pass
+
+class TimestampDurationMatchError(Exception):
+    '''raised when timestamp duration does not match duration of video'''
+    pass
+
+def check_filesize(vid_path: str):
+    cap = cv2.VideoCapture(vid_path)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    duration = frame_count/fps
+    cap.release()
+    file_byte = os.path.getsize(vid_path)
+    bitrate = 20000000
+    expected_size = bitrate * duration / 8
+    if file_byte < expected_size * 0.8:
+        raise FileSizeTooSmallError
+
+def check_timestamp(vid_path: str, csv_path: str):
+    f = open(csv_path, 'r')
+    lines = f.readlines()
+    f.close()
+    start_timestamp, end_timestamp = lines[0], lines[-1]
+    cap = cv2.VideoCapture(vid_path)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    duration = frame_count/fps
+    timestamp_duration = (int(end_timestamp)-int(start_timestamp))/pow(10, 9)
+    if round(duration, 1) != round(timestamp_duration, 1):
+        raise TimestampDurationMatchError
+
+def pull_video(video_date=None, video_name=None):
+    if video_date == None or video_name == None:
+        subprocess.call(['./pull.sh'])
+    else:
+        subprocess.call(['./pull.sh', video_date, video_name])
 
 
 class BlurTool:
@@ -393,16 +435,16 @@ class BlurTool:
         result.release()
 
 
-bt = BlurTool()
-bt.plates = []
-bt.faces = []
-bt.plates_frame = []
-bt.plates_num = []
-bt.process_video("dashcam.mp4")
-while True:
-    cv2.imshow("frame", bt.blur_all(cv2.imread("test_person.png")))
-    if cv2.waitKey(1) & 0xFF == ord("q"):
-        break
+# bt = BlurTool()
+# bt.plates = []
+# bt.faces = []
+# bt.plates_frame = []
+# bt.plates_num = []
+# bt.process_video("dashcam.mp4")
+# while True:
+#     cv2.imshow("frame", bt.blur_all(cv2.imread("test_person.png")))
+#     if cv2.waitKey(1) & 0xFF == ord("q"):
+#         break
 
 # ls = []
 # for f in os.listdir("/Users/student/Desktop/Datasets/hdd_data/camera"):
