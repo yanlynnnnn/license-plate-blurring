@@ -4,51 +4,6 @@ import os
 import cv2
 import imutils
 import numpy as np
-import subprocess 
-from adb import adb_commands
-
-
-# from openalpr import Alpr
-# import tensorflow.compat.v1 as tf
-
-class FileSizeTooSmallError(Exception):
-    '''raised when file size is too small for duration of video'''
-    pass
-
-class TimestampDurationMatchError(Exception):
-    '''raised when timestamp duration does not match duration of video'''
-    pass
-
-def check_filesize(vid_path: str):
-    cap = cv2.VideoCapture(vid_path)
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    duration = frame_count/fps
-    cap.release()
-    file_byte = os.path.getsize(vid_path)
-    bitrate = 20000000
-    expected_size = bitrate * duration / 8
-    if file_byte < expected_size * 0.8:
-        raise FileSizeTooSmallError
-
-def check_timestamp(vid_path: str, csv_path: str):
-    f = open(csv_path, 'r')
-    lines = f.readlines()
-    f.close()
-    start_timestamp, end_timestamp = lines[0], lines[-1]
-    cap = cv2.VideoCapture(vid_path)
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    duration = frame_count/fps
-    timestamp_duration = (int(end_timestamp)-int(start_timestamp))/pow(10, 9)
-    if round(duration, 1) != round(timestamp_duration, 1):
-        raise TimestampDurationMatchError
-
-def pull_video(video_date=None, video_name=None):
-    if video_date == None or video_name == None:
-        subprocess.call(['./pull.sh'])
-    else:
-        subprocess.call(['./pull.sh', video_date, video_name])
 
 
 class BlurTool:
@@ -405,11 +360,11 @@ class BlurTool:
         self.faces = []
         self.plates = []
         cap = cv2.VideoCapture(video)
-        print(cap.isOpened())
         frame_width = int(cap.get(3))
         frame_height = int(cap.get(4))
+        output_name = str(video)[:-4] + '_PROCESSED.avi'
         result = cv2.VideoWriter(
-            "output4.avi",
+            output_name,
             cv2.VideoWriter_fourcc(*"MP4V"),
             3,
             (frame_width, frame_height),
@@ -421,15 +376,12 @@ class BlurTool:
             ret, frame = cap.read()
             if not ret:
                 break
-            # frame = self.blur_plate(frame)
             frame = self.blur_all(frame)
             self.frame_num += 1
-            # frame = self.blur_face(frame)
             result.write(frame)
-            # cv2.line(frame, (10, 10), (10, 50), (0, 255, 0), 9)
-            cv2.imshow("frame", frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
+            # cv2.imshow("frame", frame)
+            # if cv2.waitKey(1) & 0xFF == ord("q"):
+            #     break
 
         cap.release()
         result.release()
@@ -446,40 +398,3 @@ class BlurTool:
 #     if cv2.waitKey(1) & 0xFF == ord("q"):
 #         break
 
-# ls = []
-# for f in os.listdir("/Users/student/Desktop/Datasets/hdd_data/camera"):
-#     if f == '.DS_Store':
-#         continue
-#     set = [f, len(os.listdir("/Users/student/Desktop/Datasets/hdd_data/camera/%s" % f))]
-#     ls.append(set)
-
-# for i in ls:
-#     print("%s" % i[1])
-
-# print(len(ls))
-# alpr = Alpr('sg', 'openalpr.conf', 'openalpr/runtime_data')
-# if not alpr.is_loaded():
-#     print('Error loading OpenALPR')
-#     sys.exit(1)
-
-# img = cv2.resize(
-#     frame, (int(frame.shape[1]) * 2, int(frame.shape[0]) * 2))
-
-# analyzed_file = alpr.recognize_ndarray(img)
-
-# if analyzed_file['results']:
-#     for result in analyzed_file['results']:
-#         x1 = result['coordinates'][0]['x'] // 2
-#         y1 = result['coordinates'][0]['y'] // 2
-#         x2 = result['coordinates'][2]['x'] // 2
-#         y2 = result['coordinates'][2]['y'] // 2
-
-#         plate = frame[y1:y2, x1:x2]
-#         try:
-#             blurred_plate = cv2.GaussianBlur(plate, (21, 21), 4, 4, 0)
-#             frame[y1:y2, x1:x2] = blurred_plate
-#             cv2.rectangle(frame, (x1,y1), (x2,y2), (0, 255, 255), 10)
-#         except:
-#             print(x1, x2, y1, y2)
-
-# return frame
