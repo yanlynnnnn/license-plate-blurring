@@ -33,6 +33,7 @@ class PullAndCheck:
         signer = sign_m2crypto.M2CryptoSigner(os.path.expanduser("~/.android/adbkey"))
         self.device = adb_commands.AdbCommands()
         self.device.ConnectDevice(rsa_keys=[signer])
+        print('Device Connected')
 
 
     def copy_file(self, src_path, dst_path):
@@ -97,7 +98,8 @@ class PullAndCheck:
             raise TimestampDurationMatchError
 
 
-# if __name__ == "__main__":
+if __name__ == "__main__":
+    p = PullAndCheck()
 #     pull()
 #     check_filesize(
 #         "/home/yangbo/Documents/Internal/Blurring/Blur/license-plate-blurring/Data/VID_20221016_143907.mp4"
